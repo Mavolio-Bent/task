@@ -5,6 +5,8 @@
 #include <boost/config.hpp>
 #include <iostream>
 #include <mqtt/client.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -22,6 +24,14 @@ string path_cat(beast::string_view path) {
     }
     result.append(path.data(), path.size());
     return result;
+}
+
+vector<string> parse_req(beast::string_view path) {
+    //returns vector of the form 
+    // a[1] = table name a[i] are select queries for i > 1
+    vector<string> res;
+    boost::split(res, path, boost::is_any_of("/,"));
+    return res;
 }
 
 
@@ -78,19 +88,33 @@ mqtt::client& client) {
         return send(bad_request("Illegal request-target"));
     }
     std::string path = path_cat(req.target());
+    auto pth = parse_req(req.target());
     if (req.method() == http::verb::get) {
-        auto pubmsg = mqtt::make_message("get", "GET");
+        auto pubmsg = mqtt::make_message("get", string(req.target()));
         pubmsg->set_qos(1);
         client.publish(pubmsg);
+        auto msg = client.consume_message(); 
+        while (true) {
+            if (msg) {
+                break;
+            }
+        }   
         http::response<http::string_body> res{http::status::ok, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        
-        res.set(http::field::body, "foo bar");
+        res.set(http::field:stringring();
+        res.set(http::field::body, msg->to_string());
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
     } 
     if (req.method() == http::verb::post) {
+        auto pubmsg = mqtt::make_message("post", "POST");
+        pubmsg->set_qos(1);
+        client.publish(pubmsg);
+        http::response<http::empty_body> res{http::status::created, req.version()};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        
+        res.keep_alive(req.keep_alive());
+        return send(std::move(res));
         
     }
     if (req.method() == http::verb::delete_) {
@@ -135,7 +159,7 @@ void do_session(tcp::socket& socket) {
     connOps.set_keep_alive_interval(30);
     connOps.set_clean_session(true);
     client.connect(connOps);
-    cout << "Connected to MQTT Broker\n";
+    client.subscribe("out", 1);
     for(;;) {
         http::request<http::string_body> req;
         http::read(socket, buffer, req, ec);
@@ -164,6 +188,7 @@ int main(int argc, char* argv[]) {
     try {
         if (argc != 4) {
             cerr << HELP_MESSAGE;
+            return 1;
         }
         auto const address = net::ip::make_address(argv[1]);
         auto const port = static_cast<unsigned short>(atoi(argv[2]));
@@ -181,6 +206,6 @@ int main(int argc, char* argv[]) {
     }
     catch (const exception& e) {
         cerr << "Error: " << e.what() << "\n";
-        return EXIT_FAILURE;
+        return 1;
     }
 }
