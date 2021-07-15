@@ -3,7 +3,7 @@ out: server.o dbserver.o
 		g++ dbserver.o -o out/dbserver
 	
 server.o: ./src/server/server.cpp
-		g++ -c -g -I ~/boost_1_76_0 ./src/server/server.cpp 
+		g++ -c -g -I $(ARGS) ./src/server/server.cpp 
 
 dbserver.o: ./src/dbserver/dbserver.cpp
 		g++ -c -g ./src/dbserver/dbserver.cpp
