@@ -3,11 +3,56 @@
 #include <iostream>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include "parser.h"
 using namespace std;
 using namespace pqxx; 
 const string DB_NAME {"devices"};
 const string HELP_MESSAGE {"Usage: dbserver <dbuser> <password> <address> <port> <mqtt-broker address>\n"};
 string mqtt_host;
+
+class SelectSQL {
+    private:
+    std::string tables;
+    std::string columns;
+    std::string whereClauses;
+    public: 
+    SelectSQL(std::string arg) {
+        //first separate tables from queries
+        vector<string> separated;
+        boost::split(separated, arg, boost::is_any_of("/"));
+        //res is guaranteed to have at least 2 elements
+        tables = separated[1];
+        //in case we got something like /table/foo (foo may be empty)
+        if (separated.size() == 2) {
+            columns = "*";
+        }
+        if (separated[2] == "") {
+            columns = "*";
+        }
+        else {
+            vector<string> queriesAndClauses;    
+            boost::split(queriesAndClauses, separated[2], boost::is_any_of("?"));
+            if (queriesAndClauses[0] == "") {
+                columns = "*";
+                whereClauses = queriesAndClauses[1];
+            }
+            else {    
+                columns = queriesAndClauses[0];
+                if (queriesAndClauses.size() != 1) {
+                    whereClauses = queriesAndClauses[1];
+                }
+            }  
+        }          
+    }
+    std::string selectToSql() {
+        string sql = "SELECT " + columns + " FROM " + tables;
+        if (!whereClauses.empty()) {
+            sql = sql + " WHERE " + whereClauses;
+        }
+        sql = sql + ";";
+        return sql;
+    }
+};
 
 
 string format_res(result r) {
@@ -29,38 +74,12 @@ string format_res(result r) {
     }
     formatted = formatted + " }";
     return formatted;
-    
-}
-vector<string> parse_req(string path) {
-    //returns vector of the form 
-    // a[1] = table name a[i] are select queries for i > 1
-    vector<string> res;
-    boost::split(res, path, boost::is_any_of("/,"));
-    if (res.back() == "") {
-        res.pop_back();
-    }
-    return res;
 }
 
-string handle_select(vector<string> target) {
-    string sql = "SELECT ";
-    string table = target[1];
-    if (target.size() == 2) {
-        sql = sql + " * FROM " + table;
-    }
-    else {
-        sql = sql + target[2];
-        for (int i = 3; i < target.size(); i++) {
-            sql = sql + ", " + target[i];
-            }
-        sql = sql + " FROM " + table;
-    }
-    return sql;
-}
 
-void select(pqxx::connection& conn, mqtt::client& client, string targ) {
-    vector<string> target = parse_req(targ);
-    string sql = handle_select(target);       
+void select(pqxx::connection& conn, mqtt::client& client, string target) {
+    SelectSQL sel(target);
+    string sql = sel.selectToSql();   
     string res{""};
     try {
         work w(conn);
@@ -107,7 +126,8 @@ int main(int argc, char* args[]) {
                 if (msg->get_topic() == "get") {
                     select(conn, client, msg->to_string());
                 }
-                else if (msg->get_topic() == "post") {}
+                else if (msg->get_topic() == "post") {
+                }
                 else if (msg->get_topic() == "delete") {}
             }
         }

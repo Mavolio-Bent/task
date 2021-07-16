@@ -27,15 +27,6 @@ string path_cat(beast::string_view path) {
     return result;
 }
 
-vector<string> parse_req(beast::string_view path) {
-    //returns vector of the form 
-    // a[1] = table name a[i] are select queries for i > 1
-    vector<string> res;
-    boost::split(res, path, boost::is_any_of("/,"));
-    return res;
-}
-
-
 void err(beast::error_code ec, char const* what) {
     cerr << what << ": " << ec.message() << "\n";
 }
@@ -89,9 +80,40 @@ mqtt::client& client) {
         return send(bad_request("Illegal request-target"));
     }
     std::string path = path_cat(req.target());
-    auto pth = parse_req(req.target());
     if (req.method() == http::verb::get) {
-        auto pubmsg = mqtt::make_message("get", string(req.target()));
+        if (path != "./") {
+            auto pubmsg = mqtt::make_message("get", path);
+            pubmsg->set_qos(1);
+            client.publish(pubmsg);
+            auto msg = client.consume_message(); 
+            while (true) {
+                if (msg) {
+                    break;
+                }
+            }   
+            if (msg->get_topic() == "err") {
+                return send(not_found(req.target()));
+            } else {            
+                ofstream respond("out.json");
+                respond << msg->to_string();
+                respond.close();
+                http::file_body::value_type body;
+                beast::error_code ec;
+                body.open("out.json", beast::file_mode::scan, ec);            
+                http::response<http::file_body> res{piecewise_construct,
+                    make_tuple(move(body)),
+                    make_tuple(http::status::ok, req.version())};
+                res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+                res.set(http::field::content_type, "application/json");
+                res.keep_alive(req.keep_alive());
+                return send(std::move(res));
+            }
+        }       
+        else return send(not_found(req.target()));
+    } 
+    if (req.method() == http::verb::post) {
+        string trg = req.body();
+        auto pubmsg = mqtt::make_message("post", trg);
         pubmsg->set_qos(1);
         client.publish(pubmsg);
         auto msg = client.consume_message(); 
@@ -101,32 +123,13 @@ mqtt::client& client) {
             }
         }   
         if (msg->get_topic() == "err") {
-            return send(not_found(req.target()));
+            return send(bad_request("Invalid query"));
         } else {            
-            ofstream respond("out.json");
-            respond << msg->to_string();
-            respond.close();
-            http::file_body::value_type body;
-            beast::error_code ec;
-            body.open("out.json", beast::file_mode::scan, ec);            
-            http::response<http::file_body> res{piecewise_construct,
-                    make_tuple(move(body)),
-                    make_tuple(http::status::ok, req.version())};
+            http::response<http::empty_body> res{http::status::created, req.version()};
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "application/json");
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
-        }   
-    } 
-    if (req.method() == http::verb::post) {
-        auto pubmsg = mqtt::make_message("post", "POST");
-        pubmsg->set_qos(1);
-        client.publish(pubmsg);
-        http::response<http::empty_body> res{http::status::created, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        
-        res.keep_alive(req.keep_alive());
-        return send(std::move(res));
+        }
         
     }
     if (req.method() == http::verb::delete_) {
