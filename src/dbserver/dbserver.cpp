@@ -76,14 +76,16 @@ int main(int argc, char* args[]) {
                             }
                             res = res + "\n";
                         } 
+                        auto pubmsg = mqtt::make_message("out", res);                     
+                        pubmsg->set_qos(1);
+                        client.publish(pubmsg); 
                     }
                     catch (const exception &e) {
-                        res = e.what();                        
-                    }
-                    
-                    auto pubmsg = mqtt::make_message("out", res);
-                    pubmsg->set_qos(1);
-                    client.publish(pubmsg);  
+                        res = e.what();      
+                        auto pubmsg = mqtt::make_message("err", res);                     
+                        pubmsg->set_qos(1);
+                        client.publish(pubmsg);                   
+                    } 
                 }
             }
         }

@@ -60,7 +60,7 @@ mqtt::client& client) {
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
         res.set(http::field::content_type, "text/html");
         res.keep_alive(req.keep_alive());
-        res.body() = "The resource '" + std::string(target) + "' was not found.";
+        res.body() = "The resource '" + std::string(target) + "' was not found.\n";
         res.prepare_payload();
         return res;
     };
@@ -99,12 +99,16 @@ mqtt::client& client) {
                 break;
             }
         }   
-        http::response<http::string_body> res{http::status::ok, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "application/text");
-        res.set(http::field::body, msg->to_string());
-        res.keep_alive(req.keep_alive());
-        return send(std::move(res));
+        if (msg->get_topic() == "err") {
+            return send(not_found(req.target()));
+        } else {
+            http::response<http::string_body> res{http::status::ok, req.version()};
+            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(http::field::content_type, "application/text");
+            res.set(http::field::body, msg->to_string());
+            res.keep_alive(req.keep_alive());
+            return send(std::move(res));
+        }   
     } 
     if (req.method() == http::verb::post) {
         auto pubmsg = mqtt::make_message("post", "POST");
@@ -160,6 +164,7 @@ void do_session(tcp::socket& socket) {
     connOps.set_clean_session(true);
     client.connect(connOps);
     client.subscribe("out", 1);
+    client.subscribe("err", 1);
     for(;;) {
         http::request<http::string_body> req;
         http::read(socket, buffer, req, ec);
