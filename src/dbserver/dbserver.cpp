@@ -14,6 +14,9 @@ vector<string> parse_req(string path) {
     // a[1] = table name a[i] are select queries for i > 1
     vector<string> res;
     boost::split(res, path, boost::is_any_of("/,"));
+    if (res.back() == "") {
+        res.pop_back();
+    }
     return res;
 }
 
@@ -28,7 +31,7 @@ string handle_select(vector<string> target) {
         for (int i = 3; i < target.size(); i++) {
             sql = sql + ", " + target[i];
             }
-        sql = sql + "FROM " + table;
+        sql = sql + " FROM " + table;
     }
     return sql;
 }
@@ -68,7 +71,6 @@ int main(int argc, char* args[]) {
                     for (auto row = r.begin(); row != r.end(); row++) {
                         for (auto field = row.begin(); field != row.end(); field++) {
                             res = res + field->c_str() + "\t";
-                            cout << field->c_str();
                         }
                         res = res + "\n";
                     }

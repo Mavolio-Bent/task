@@ -101,7 +101,7 @@ mqtt::client& client) {
         }   
         http::response<http::string_body> res{http::status::ok, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field:stringring();
+        res.set(http::field::content_type, "application/text");
         res.set(http::field::body, msg->to_string());
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
