@@ -4,6 +4,7 @@
 #include <boost/beast/version.hpp>
 #include <boost/config.hpp>
 #include <iostream>
+#include <fstream>
 #include <mqtt/client.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -78,9 +79,9 @@ mqtt::client& client) {
     
     if (req.method() != http::verb::get &&
         req.method() != http::verb::post &&
-        req.method() != http::verb::delete_){
+        req.method() != http::verb::delete_) {
         return send(bad_request("Unknown HTTP-method"));
-        }
+    }
 
     if (req.target().empty() ||
         req.target()[0] != '/' ||
@@ -101,11 +102,18 @@ mqtt::client& client) {
         }   
         if (msg->get_topic() == "err") {
             return send(not_found(req.target()));
-        } else {
-            http::response<http::string_body> res{http::status::ok, req.version()};
+        } else {            
+            ofstream respond("out.json");
+            respond << msg->to_string();
+            respond.close();
+            http::file_body::value_type body;
+            beast::error_code ec;
+            body.open("out.json", beast::file_mode::scan, ec);            
+            http::response<http::file_body> res{piecewise_construct,
+                    make_tuple(move(body)),
+                    make_tuple(http::status::ok, req.version())};
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "application/text");
-            res.set(http::field::body, msg->to_string());
+            res.set(http::field::content_type, "application/json");
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
         }   

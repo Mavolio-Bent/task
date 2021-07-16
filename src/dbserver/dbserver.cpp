@@ -9,6 +9,28 @@ const string DB_NAME {"devices"};
 const string HELP_MESSAGE {"Usage: dbserver <dbuser> <password> <address> <port> <mqtt-broker address>\n"};
 string mqtt_host;
 
+
+string format_res(result r) {
+    string formatted = "{ ";
+    int i = 1;
+    for (auto row = r.begin(); row != r.end(); row++, i++) {
+        formatted = formatted + "\"row " + to_string(i) + "\": [";
+        int k = 0;
+        for (auto field = row.begin(); field != row.end(); field++, k++) {
+            formatted = formatted + "\"" + field->c_str() + "\"";
+            if (k != row.size()-1) {
+                formatted = formatted + ",";
+            }
+        }
+        formatted = formatted + "]";
+        if (i != r.size()) {
+            formatted = formatted +",";
+        }
+    }
+    formatted = formatted + " }";
+    return formatted;
+    
+}
 vector<string> parse_req(string path) {
     //returns vector of the form 
     // a[1] = table name a[i] are select queries for i > 1
@@ -44,12 +66,7 @@ void select(pqxx::connection& conn, mqtt::client& client, string targ) {
         work w(conn);
         result r = w.exec(sql);
         w.commit();
-        for (auto row = r.begin(); row != r.end(); row++) {
-            for (auto field = row.begin(); field != row.end(); field++) {
-                res = res + field->c_str() + "\t";
-            }
-            res = res + "\n";
-        } 
+        res = format_res(r);
         auto pubmsg = mqtt::make_message("out", res);                     
         pubmsg->set_qos(1);
         client.publish(pubmsg); 
