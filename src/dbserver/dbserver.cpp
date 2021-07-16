@@ -3,7 +3,7 @@
 #include <iostream>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
-#include "parser.h"
+
 using namespace std;
 using namespace pqxx; 
 const string DB_NAME {"devices"};
@@ -54,6 +54,32 @@ class SelectSQL {
     }
 };
 
+class DeleteSQL {
+    private:
+    string table;
+    string deleteClause;
+    public:
+    DeleteSQL(string path) {
+        vector<string> separated;
+        boost::split(separated, path, boost::is_any_of("/"));
+        table = separated[1];
+        if (separated.size() == 2) {
+            deleteClause = "";
+        }
+        else {
+            deleteClause = separated[2]; 
+        }
+    }
+    string deleteToSQL() {
+        string sql = "DELETE FROM " + table;
+        if (!deleteClause.empty()) {
+            sql = sql + " WHERE " + deleteClause;
+        }
+        sql = sql + ";";
+        return sql;
+    }
+    
+};
 
 string format_res(result r) {
     string formatted = "{ ";
@@ -98,6 +124,26 @@ void select(pqxx::connection& conn, mqtt::client& client, string target) {
     } 
 }
 
+void del(pqxx::connection& conn, mqtt::client& client, string target) {
+    DeleteSQL delet(target);
+    string sql = delet.deleteToSQL();   
+    string res{""};
+    try {
+        work w(conn);
+        result r = w.exec(sql);
+        w.commit();
+        auto pubmsg = mqtt::make_message("out", "ok");                     
+        pubmsg->set_qos(1);
+        client.publish(pubmsg); 
+    }
+    catch (const exception &e) {
+        res = e.what();      
+        auto pubmsg = mqtt::make_message("err", res);                     
+        pubmsg->set_qos(1);
+        client.publish(pubmsg);                   
+    } 
+}
+
 int main(int argc, char* args[]) {
     try {
         if (argc != 6) {
@@ -128,7 +174,9 @@ int main(int argc, char* args[]) {
                 }
                 else if (msg->get_topic() == "post") {
                 }
-                else if (msg->get_topic() == "delete") {}
+                else if (msg->get_topic() == "delete") {
+                    del(conn, client, msg->to_string());
+                }
             }
         }
     } catch (const exception &e) {

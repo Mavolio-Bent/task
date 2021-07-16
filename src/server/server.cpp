@@ -133,7 +133,26 @@ mqtt::client& client) {
         
     }
     if (req.method() == http::verb::delete_) {
-        
+        if (path != "./") {
+            auto pubmsg = mqtt::make_message("delete", path);
+            pubmsg->set_qos(1);
+            client.publish(pubmsg);
+            auto msg = client.consume_message(); 
+            while (true) {
+                if (msg) {
+                    break;
+                }
+            }   
+            if (msg->get_topic() == "err") {
+                return send(not_found(req.target()));
+            } else {                     
+                http::response<http::empty_body> res{http::status::accepted, req.version()};
+                res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+                res.keep_alive(req.keep_alive());
+                return send(std::move(res));
+            }
+        }       
+        else return send(not_found(req.target()));
     }
     
 }
