@@ -125,8 +125,17 @@ mqtt::client& client) {
         if (msg->get_topic() == "err") {
             return send(bad_request("Invalid query"));
         } else {            
-            http::response<http::empty_body> res{http::status::created, req.version()};
+            ofstream respond("out.json");
+            respond << msg->to_string();
+            respond.close();
+            http::file_body::value_type body;
+            beast::error_code ec;
+            body.open("out.json", beast::file_mode::scan, ec);   
+            http::response<http::file_body> res{piecewise_construct,
+                    make_tuple(move(body)),
+                    make_tuple(http::status::ok, req.version())};
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(http::field::content_type, "application/json");
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
         }
@@ -142,15 +151,20 @@ mqtt::client& client) {
                 if (msg) {
                     break;
                 }
-            }   
-            if (msg->get_topic() == "err") {
-                return send(not_found(req.target()));
-            } else {                     
-                http::response<http::empty_body> res{http::status::accepted, req.version()};
-                res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-                res.keep_alive(req.keep_alive());
-                return send(std::move(res));
-            }
+            }                   
+            ofstream respond("out.json");
+            respond << msg->to_string();
+            respond.close();
+            http::file_body::value_type body;
+            beast::error_code ec;
+            body.open("out.json", beast::file_mode::scan, ec);   
+            http::response<http::file_body> res{piecewise_construct,
+                    make_tuple(move(body)),
+                    make_tuple(http::status::ok, req.version())};
+            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(http::field::content_type, "application/json");
+            res.keep_alive(req.keep_alive());
+            return send(std::move(res));
         }       
         else return send(not_found(req.target()));
     }

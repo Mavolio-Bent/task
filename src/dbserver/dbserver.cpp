@@ -81,6 +81,13 @@ class DeleteSQL {
     
 };
 
+class InsertSQL {
+    private:
+    string table;
+    string columns;
+    string values;
+};
+
 string format_res(result r) {
     string formatted = "{ ";
     int i = 1;
@@ -132,13 +139,13 @@ void del(pqxx::connection& conn, mqtt::client& client, string target) {
         work w(conn);
         result r = w.exec(sql);
         w.commit();
-        auto pubmsg = mqtt::make_message("out", "ok");                     
+        auto pubmsg = mqtt::make_message("out", "{\"success\": \"true\"}");                     
         pubmsg->set_qos(1);
         client.publish(pubmsg); 
     }
     catch (const exception &e) {
         res = e.what();      
-        auto pubmsg = mqtt::make_message("err", res);                     
+        auto pubmsg = mqtt::make_message("err", "{\"success\": \"false\"}");                     
         pubmsg->set_qos(1);
         client.publish(pubmsg);                   
     } 
