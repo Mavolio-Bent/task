@@ -64,24 +64,31 @@ int main(int argc, char* args[]) {
                 if (msg->get_topic() == "get") {
                     vector<string> target = parse_req(msg->to_string());
                     string sql = handle_select(target);
-                    work w(conn);
-                    result r = w.exec(sql);
-                    w.commit();
+                    
                     string res{""};
-                    for (auto row = r.begin(); row != r.end(); row++) {
-                        for (auto field = row.begin(); field != row.end(); field++) {
-                            res = res + field->c_str() + "\t";
-                        }
-                        res = res + "\n";
+                    try {
+                        work w(conn);
+                        result r = w.exec(sql);
+                        w.commit();
+                        for (auto row = r.begin(); row != r.end(); row++) {
+                            for (auto field = row.begin(); field != row.end(); field++) {
+                                res = res + field->c_str() + "\t";
+                            }
+                            res = res + "\n";
+                        } 
                     }
+                    catch (const exception &e) {
+                        res = e.what();                        
+                    }
+                    
                     auto pubmsg = mqtt::make_message("out", res);
                     pubmsg->set_qos(1);
                     client.publish(pubmsg);  
                 }
             }
         }
-    } catch (const std::exception &e) {
-      cerr << e.what() << std::endl;
+    } catch (const exception &e) {
+      cerr << e.what() << "\n";
       return 1;
     }
 }
