@@ -36,6 +36,32 @@ string handle_select(vector<string> target) {
     return sql;
 }
 
+void select(pqxx::connection& conn, mqtt::client& client, string targ) {
+    vector<string> target = parse_req(targ);
+    string sql = handle_select(target);       
+    string res{""};
+    try {
+        work w(conn);
+        result r = w.exec(sql);
+        w.commit();
+        for (auto row = r.begin(); row != r.end(); row++) {
+            for (auto field = row.begin(); field != row.end(); field++) {
+                res = res + field->c_str() + "\t";
+            }
+            res = res + "\n";
+        } 
+        auto pubmsg = mqtt::make_message("out", res);                     
+        pubmsg->set_qos(1);
+        client.publish(pubmsg); 
+    }
+    catch (const exception &e) {
+        res = e.what();      
+        auto pubmsg = mqtt::make_message("err", res);                     
+        pubmsg->set_qos(1);
+        client.publish(pubmsg);                   
+    } 
+}
+
 int main(int argc, char* args[]) {
     try {
         if (argc != 6) {
@@ -62,31 +88,10 @@ int main(int argc, char* args[]) {
             auto msg = client.consume_message();
             if (msg) {
                 if (msg->get_topic() == "get") {
-                    vector<string> target = parse_req(msg->to_string());
-                    string sql = handle_select(target);
-                    
-                    string res{""};
-                    try {
-                        work w(conn);
-                        result r = w.exec(sql);
-                        w.commit();
-                        for (auto row = r.begin(); row != r.end(); row++) {
-                            for (auto field = row.begin(); field != row.end(); field++) {
-                                res = res + field->c_str() + "\t";
-                            }
-                            res = res + "\n";
-                        } 
-                        auto pubmsg = mqtt::make_message("out", res);                     
-                        pubmsg->set_qos(1);
-                        client.publish(pubmsg); 
-                    }
-                    catch (const exception &e) {
-                        res = e.what();      
-                        auto pubmsg = mqtt::make_message("err", res);                     
-                        pubmsg->set_qos(1);
-                        client.publish(pubmsg);                   
-                    } 
+                    select(conn, client, msg->to_string());
                 }
+                else if (msg->get_topic() == "post") {}
+                else if (msg->get_topic() == "delete") {}
             }
         }
     } catch (const exception &e) {
