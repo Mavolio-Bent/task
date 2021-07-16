@@ -112,8 +112,8 @@ mqtt::client& client) {
         else return send(not_found(req.target()));
     } 
     if (req.method() == http::verb::post) {
-        string trg = req.body();
-        auto pubmsg = mqtt::make_message("post", trg);
+        string request = req.body();
+        auto pubmsg = mqtt::make_message("post", request);
         pubmsg->set_qos(1);
         client.publish(pubmsg);
         auto msg = client.consume_message(); 

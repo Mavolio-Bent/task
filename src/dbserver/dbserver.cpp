@@ -3,6 +3,8 @@
 #include <iostream>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <sstream>
 
 using namespace std;
 using namespace pqxx; 
@@ -26,7 +28,7 @@ class SelectSQL {
         if (separated.size() == 2) {
             columns = "*";
         }
-        if (separated[2] == "") {
+        else if (separated[2] == "") {
             columns = "*";
         }
         else {
@@ -84,8 +86,12 @@ class DeleteSQL {
 class InsertSQL {
     private:
     string table;
-    string columns;
-    string values;
+    vector<string> columns;
+    vector<vector<string>> values;
+    public:
+    InsertSQL(string target) {
+        
+    }
 };
 
 string format_res(result r) {
