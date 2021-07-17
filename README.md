@@ -34,7 +34,7 @@ Assuming server is hosted at `address` and there is database named `dbname` on t
 ```
 $ curl address/dbname/<tables>/<columns>?<clauses>
 ```
-where `<tables>` is list of tables separated by commas without spaces, `<columns>` is list of columns separated by commas without spaces and `?<clauses>` is list of `WHERE` clauses separated by commas without spaces.
+where `<tables>` is list of tables separated by commas without spaces, `<columns>` is list of columns separated by commas without spaces and `?<clauses>` is list of `WHERE` clauses separated by commas without spaces. **Attention: clauses like `foo AND bar`** are not supported.
 
 ### Examples:
 ```
@@ -62,6 +62,7 @@ Equivalent is
 ```
 $ curl -X "POST" -d JSON_STRING  -H "Content-Type: application-json" address/dbname/table
 ```
+**Attention: this method is not recommended since it requires proper enclosing of columns by backslashes. It is better to send json as file**
 
 Json is assumed to have the contents of following format
 ```
