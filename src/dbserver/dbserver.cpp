@@ -168,6 +168,18 @@ pair<string, string> separate(string path) {
     return make_pair(first, second);
 }
 
+string handle_backslash(string in) {
+    string res = in;
+    for (int i = 0; i < res.size(); i++) {
+        if (res[i] == '\\') {
+            res.insert(i, "\\");
+            i += 2;
+        }
+        
+    }
+    return res;
+}
+
 string format_res(result r) {
     string formatted = "{ ";
     int i = 1;
@@ -175,7 +187,9 @@ string format_res(result r) {
         formatted = formatted + "\"row " + to_string(i) + "\": [";
         int k = 0;
         for (auto field = row.begin(); field != row.end(); field++, k++) {
-            formatted = formatted + "\"" + field->c_str() + "\"";
+            string query(field->c_str());
+            query = handle_backslash(query);
+            formatted = formatted + "\"" + query + "\"";
             if (k != row.size()-1) {
                 formatted = formatted + ",";
             }
@@ -279,6 +293,7 @@ int main(int argc, char* args[]) {
                         " password = " + PASSWORD + " hostaddr = " + ADDRESS + " port = " + PORT);
                     select(conn, client, sep.second);
                 }
+                
                 else if (msg->get_topic() == "post") {
                     const auto idx = sep.second.find_first_of("/");
                     if (std::string::npos != idx) { 
