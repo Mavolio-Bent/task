@@ -4,6 +4,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/algorithm/string/iter_find.hpp>
+#include <boost/algorithm/string/finder.hpp>
+#include <boost/property_tree/ptree.hpp>
 #include <sstream>
 
 using namespace std;
@@ -86,11 +89,59 @@ class DeleteSQL {
 class InsertSQL {
     private:
     string table;
-    vector<string> columns;
-    vector<vector<string>> values;
+    string columns;
+    vector<string> values;
     public:
-    InsertSQL(string target) {
-        
+    InsertSQL(string objective) {
+        vector<string> separated;
+        iter_split(separated, objective, boost::algorithm::first_finder("@JSON_ESCAPE_SEQUENCE@"));
+        table = separated[0];
+        string target = separated[1];
+        stringstream ss;
+        ss << target;
+        boost::property_tree::ptree pt;
+        boost::property_tree::read_json(ss, pt);
+        for (const auto& kv : pt) {
+            if (kv.first == "columns") {
+                columns = "(";
+                boost::property_tree::ptree columns_array = pt.get_child(kv.first);
+                boost::property_tree::ptree::iterator position = columns_array.begin();
+                for (;position != columns_array.end(); position++) {
+                    columns = columns + position->second.get_value<string>() + ", ";
+                }
+                if  (columns.size() >= 3) {
+                    columns.pop_back();
+                    columns.pop_back();
+                }
+                columns = columns + ")";
+            }
+            else {
+                string key = kv.first;
+                string tmp = "(";
+                boost::property_tree::ptree columns_array = pt.get_child(kv.first);
+                boost::property_tree::ptree::iterator position = columns_array.begin();
+                for (;position != columns_array.end(); position++) {
+                    tmp = tmp + position->second.get_value<string>() + ", ";
+                }
+                if (tmp.size() >= 3) {
+                    tmp.pop_back();
+                    tmp.pop_back();
+                }
+                tmp += ")";
+                values.push_back(tmp);
+            }
+        }
+    }
+    string InsertToSql() {
+        string sql = "INSERT INTO " + table + " " + columns + " VALUES ";
+        for (int i = 0; i < values.size(); i++) {
+            sql = sql + values[i];
+            if (i != values.size()-1) {
+                sql = sql + ",";
+            }
+        }
+        sql = sql + ";";
+        return sql;
     }
 };
 
@@ -137,6 +188,25 @@ void select(pqxx::connection& conn, mqtt::client& client, string target) {
     } 
 }
 
+void insert(pqxx::connection& conn, mqtt::client& client, string target) {
+    InsertSQL ins(target);
+    string sql = ins.InsertToSql();   
+    string res{""};
+    try {
+        work w(conn);
+        result r = w.exec(sql);
+        w.commit();
+        auto pubmsg = mqtt::make_message("out", "{\"success\": \"true\"}");                     
+        pubmsg->set_qos(1);
+        client.publish(pubmsg); 
+    }
+    catch (const exception &e) {
+        auto pubmsg = mqtt::make_message("err", "{\"success\": \"false\"}");                     
+        pubmsg->set_qos(1);
+        client.publish(pubmsg);                   
+    } 
+}
+
 void del(pqxx::connection& conn, mqtt::client& client, string target) {
     DeleteSQL delet(target);
     string sql = delet.deleteToSQL();   
@@ -150,7 +220,6 @@ void del(pqxx::connection& conn, mqtt::client& client, string target) {
         client.publish(pubmsg); 
     }
     catch (const exception &e) {
-        res = e.what();      
         auto pubmsg = mqtt::make_message("err", "{\"success\": \"false\"}");                     
         pubmsg->set_qos(1);
         client.publish(pubmsg);                   
@@ -186,6 +255,16 @@ int main(int argc, char* args[]) {
                     select(conn, client, msg->to_string());
                 }
                 else if (msg->get_topic() == "post") {
+                    const auto idx = msg->to_string().find_first_of("/");
+                    if (std::string::npos != idx) { 
+                        string targ = msg->to_string().substr(idx + 1);
+                        insert(conn, client, targ);
+                    }
+                    else {
+                        auto pubmsg = mqtt::make_message("err", "{\"success\": \"false\"}");                     
+                        pubmsg->set_qos(1);
+                        client.publish(pubmsg);    
+                    }
                 }
                 else if (msg->get_topic() == "delete") {
                     del(conn, client, msg->to_string());

@@ -112,7 +112,8 @@ mqtt::client& client) {
         else return send(not_found(req.target()));
     } 
     if (req.method() == http::verb::post) {
-        string request = req.body();
+        
+        string request = path + "@JSON_ESCAPE_SEQUENCE@" + req.body();
         auto pubmsg = mqtt::make_message("post", request);
         pubmsg->set_qos(1);
         client.publish(pubmsg);
@@ -121,24 +122,20 @@ mqtt::client& client) {
             if (msg) {
                 break;
             }
-        }   
-        if (msg->get_topic() == "err") {
-            return send(bad_request("Invalid query"));
-        } else {            
-            ofstream respond("out.json");
-            respond << msg->to_string();
-            respond.close();
-            http::file_body::value_type body;
-            beast::error_code ec;
-            body.open("out.json", beast::file_mode::scan, ec);   
-            http::response<http::file_body> res{piecewise_construct,
-                    make_tuple(move(body)),
-                    make_tuple(http::status::ok, req.version())};
-            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "application/json");
-            res.keep_alive(req.keep_alive());
-            return send(std::move(res));
-        }
+        }                   
+        ofstream respond("out.json");
+        respond << msg->to_string();
+        respond.close();
+        http::file_body::value_type body;
+        beast::error_code ec;
+        body.open("out.json", beast::file_mode::scan, ec);   
+        http::response<http::file_body> res{piecewise_construct,
+                make_tuple(move(body)),
+                make_tuple(http::status::ok, req.version())};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type, "application/json");
+        res.keep_alive(req.keep_alive());
+        return send(std::move(res));
         
     }
     if (req.method() == http::verb::delete_) {
@@ -204,7 +201,7 @@ void do_session(tcp::socket& socket) {
     send_lambda<tcp::socket> lambda{socket, close, ec};
     mqtt::client client(mqtt_host, "server");
     mqtt::connect_options connOps;
-    connOps.set_keep_alive_interval(30);
+    connOps.set_keep_alive_interval(300);
     connOps.set_clean_session(true);
     client.connect(connOps);
     client.subscribe("out", 1);
@@ -226,10 +223,7 @@ void do_session(tcp::socket& socket) {
         }
     }
     client.disconnect();
-    cout << "disconnected\n";
-    socket.shutdown(tcp::socket::shutdown_send, ec);
-
-    
+    socket.shutdown(tcp::socket::shutdown_send, ec);    
 }
 
         
