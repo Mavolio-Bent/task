@@ -59,7 +59,7 @@ $ curl -X "POST" -d "@path_to_file" address/dbname/table
 ```
 where `path_to_file` locates json file containing insertion.
 Equivalent is
-````
+```
 $ curl -X "POST" -d JSON_STRING  -H "Content-Type: application-json" address/dbname/table
 ```
 
