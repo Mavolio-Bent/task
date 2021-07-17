@@ -11,7 +11,7 @@
 
 using namespace std;
 using namespace pqxx; 
-const string HELP_MESSAGE {"Usage: dbserver <dbname> <dbuser> <password> <address> <port> <mqtt-broker address>\n"};
+const string HELP_MESSAGE {"Usage: dbserver <dbuser> <password> <address> <port> <mqtt-broker address>\n"};
 string mqtt_host;
 
 class SelectSQL {

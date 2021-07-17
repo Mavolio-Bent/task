@@ -1,4 +1,5 @@
 out: server.o dbserver.o
+		mkdir out
 		g++ server.o -o out/server -lpthread -lpaho-mqttpp3 -lpaho-mqtt3as
 		g++ dbserver.o -o out/dbserver -lpthread -lpqxx  -lpaho-mqttpp3 -lpaho-mqtt3as
 	
