@@ -146,7 +146,7 @@ public:
                 boost::property_tree::ptree::iterator position = columns_array.begin();
                 for (; position != columns_array.end(); position++)
                 {
-                    tmp = tmp + position->second.get_value<string>() + ", ";
+                    tmp = tmp + "'" + position->second.get_value<string>() + "'" + ", ";
                 }
                 if (tmp.size() >= 3)
                 {

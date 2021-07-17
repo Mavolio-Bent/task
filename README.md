@@ -62,15 +62,14 @@ Equivalent is
 ```
 $ curl -X "POST" -d JSON_STRING  -H "Content-Type: application-json" address/dbname/table
 ```
-**Attention: this method is not recommended since it requires proper enclosing of columns by backslashes. It is better to send json as file**
 
 Json is assumed to have the contents of following format
 ```
 {
     "columns": ["col_1", ..., "col_N"],
-    "row_1": ["'val_1'", ..., "'val_N'"],
+    "row_1": ["val_1", ..., "val_N"],
     ...,
-    "row_N": ["'val_1'", ..., "'val_N'"]
+    "row_N": ["val_1", ..., "val_N"]
 }
 ```
 and is translated to
