@@ -43,6 +43,7 @@ $ curl 127.0.0.1:8080/dvdrental/staff,store/
 ```
 $ curl 127.0.0.1:8080/dvdrental/staff,store/?staff_id=manager_staff_id
 ```
+```
 $ curl 127.0.0.1:8080/dvdrental/staff/staff_id
 ```
 
