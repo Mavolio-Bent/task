@@ -17,6 +17,7 @@ using namespace std;
 
 const string HELP_MESSAGE{"Usage: server <host> <port> <mqtt-broker address>\n"};
 string mqtt_host;
+//make path having nice form
 string path_cat(beast::string_view path)
 {
     string result{"."};
@@ -39,6 +40,7 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
                     mqtt::client &client)
 {
 
+    //lambda for handling bad requests
     auto const bad_request =
         [&req](beast::string_view why)
     {
@@ -50,7 +52,7 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
         res.prepare_payload();
         return res;
     };
-
+    //lambda for producing 404 error
     auto const not_found =
         [&req](beast::string_view target)
     {
@@ -62,7 +64,7 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
         res.prepare_payload();
         return res;
     };
-
+    //lambda for producing respond with server error code
     auto const server_error =
         [&req](beast::string_view what)
     {
@@ -83,12 +85,12 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
     }
 
     if (req.target().empty() ||
-        req.target()[0] != '/' ||
-        req.target().find("..") != beast::string_view::npos)
+        req.target()[0] != '/')
     {
         return send(bad_request("Illegal request-target"));
     }
     std::string path = path_cat(req.target());
+    //handle get request
     if (req.method() == http::verb::get)
     {
         if (path != "./")
@@ -110,6 +112,7 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
             }
             else if (msg->get_topic() == "out")
             {
+                //write body of respond
                 ofstream respond("out.json");
                 respond << msg->to_string();
                 respond.close();
@@ -134,7 +137,7 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
     }
     if (req.method() == http::verb::post)
     {
-
+        //inserting unique escape sequence to delimit path from concatenated body of request
         string request = path + "@JSON_ESCAPE_SEQUENCE@" + req.body();
         auto pubmsg = mqtt::make_message("post", request);
         pubmsg->set_qos(1);
@@ -153,6 +156,7 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
         }
         else
         {
+            //write body of respond
             ofstream respond("out.json");
             respond << msg->to_string();
             respond.close();
@@ -210,6 +214,7 @@ void handle_request(http::request<Body, http::basic_fields<Allocator>> &&req, Se
     }
 }
 
+//lambda to send messages
 template <class Stream>
 struct send_lambda
 {
@@ -235,6 +240,7 @@ struct send_lambda
     }
 };
 
+//handle requests and sessions
 void do_session(tcp::socket &socket)
 {
     bool close = false;
@@ -246,8 +252,11 @@ void do_session(tcp::socket &socket)
     connOps.set_keep_alive_interval(300);
     connOps.set_clean_session(true);
     client.connect(connOps);
+    //out is normal output
     client.subscribe("out", 1);
+    //err is error
     client.subscribe("err", 1);
+    //serr is dbserver error
     client.subscribe("serr", 1);
     for (;;)
     {

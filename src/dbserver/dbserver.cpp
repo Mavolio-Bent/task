@@ -14,6 +14,7 @@ using namespace pqxx;
 const string HELP_MESSAGE{"Usage: dbserver <dbuser> <password> <address> <port> <mqtt-broker address>\n"};
 string mqtt_host;
 
+//class that contains fields of SELECT statement and formats them to string
 class SelectSQL
 {
 private:
@@ -22,6 +23,7 @@ private:
     std::string whereClauses;
 
 public:
+    //string of the form /table/columns?clause is parsed to object
     SelectSQL(std::string arg)
     {
         //first separate tables from queries
@@ -40,6 +42,7 @@ public:
         }
         else
         {
+            //separating clauses from queries
             vector<string> queriesAndClauses;
             boost::split(queriesAndClauses, separated[2], boost::is_any_of("?"));
             if (queriesAndClauses[0] == "")
@@ -57,6 +60,7 @@ public:
             }
         }
     }
+    //creates sql string associated with object
     std::string selectToSql()
     {
         string sql = "SELECT " + columns + " FROM " + tables;
@@ -69,6 +73,7 @@ public:
     }
 };
 
+//this is completely analogous to SelectSQL class
 class DeleteSQL
 {
 private:
@@ -102,6 +107,7 @@ public:
     }
 };
 
+//analogous to SelectSQL class but with differences in constructor
 class InsertSQL
 {
 private:
@@ -112,16 +118,21 @@ private:
 public:
     InsertSQL(string objective)
     {
+
         vector<string> separated;
+        //string is assumed to have this substring to delimit json body from path to table
         iter_split(separated, objective, boost::algorithm::first_finder("@JSON_ESCAPE_SEQUENCE@"));
         table = separated[0];
         string target = separated[1];
         stringstream ss;
         ss << target;
+        //parsing json to fields
         boost::property_tree::ptree pt;
         boost::property_tree::read_json(ss, pt);
+        
         for (const auto &kv : pt)
         {
+            //keyword columns met and columns field is filled
             if (kv.first == "columns")
             {
                 columns = "(";
@@ -138,6 +149,7 @@ public:
                 }
                 columns = columns + ")";
             }
+            //filling rows fields
             else
             {
                 string key = kv.first;
@@ -174,7 +186,7 @@ public:
     }
 };
 
-//separates request in the form of ./dbname/bar to be pair (dname ./bar)
+//separates request in the form of ./dbname/bar to be pair (dbname ./bar)
 pair<string, string> separate(string path)
 {
     string first = "";
@@ -204,6 +216,7 @@ pair<string, string> separate(string path)
     return make_pair(first, second);
 }
 
+//insert backslashes to produce valid json output
 string handle_backslash(string in)
 {
     string res = in;
@@ -218,6 +231,7 @@ string handle_backslash(string in)
     return res;
 }
 
+//formats result of select statement to json string
 string format_res(result r)
 {
     string formatted = "{ ";
@@ -246,6 +260,7 @@ string format_res(result r)
     return formatted;
 }
 
+//performs select statement
 void select(pqxx::connection &conn, mqtt::client &client, string target)
 {
     SelectSQL sel(target);
@@ -270,6 +285,7 @@ void select(pqxx::connection &conn, mqtt::client &client, string target)
     }
 }
 
+//insert sql statement
 void insert(pqxx::connection &conn, mqtt::client &client, string target)
 {
     InsertSQL ins(target);
@@ -292,6 +308,7 @@ void insert(pqxx::connection &conn, mqtt::client &client, string target)
     }
 }
 
+//delete sql statement
 void del(pqxx::connection &conn, mqtt::client &client, string target)
 {
     DeleteSQL delet(target);
@@ -335,7 +352,9 @@ int main(int argc, char *args[])
     client.subscribe({"get", "post", "delete"}, {1, 1, 1});
     for (;;)
     {
+        //consumes message
         auto msg = client.consume_message();
+        //if message is consumed handle it
         if (msg)
         {
             auto sep = separate(msg->to_string());
@@ -353,6 +372,7 @@ int main(int argc, char *args[])
 
                 else if (msg->get_topic() == "post")
                 {
+                    //we cannot just split at all / as we do in other statements so do this manually at first
                     const auto idx = sep.second.find_first_of("/");
                     if (std::string::npos != idx)
                     {
