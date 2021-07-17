@@ -93,7 +93,7 @@ mqtt::client& client) {
             }   
             if (msg->get_topic() == "err") {
                 return send(not_found(req.target()));
-            } else {            
+            } else if (msg->get_topic()=="out") {            
                 ofstream respond("out.json");
                 respond << msg->to_string();
                 respond.close();
@@ -107,6 +107,9 @@ mqtt::client& client) {
                 res.set(http::field::content_type, "application/json");
                 res.keep_alive(req.keep_alive());
                 return send(std::move(res));
+            }
+            else {
+                return send(server_error(msg->to_string()));
             }
         }       
         else return send(not_found(req.target()));
@@ -122,33 +125,11 @@ mqtt::client& client) {
             if (msg) {
                 break;
             }
-        }                   
-        ofstream respond("out.json");
-        respond << msg->to_string();
-        respond.close();
-        http::file_body::value_type body;
-        beast::error_code ec;
-        body.open("out.json", beast::file_mode::scan, ec);   
-        http::response<http::file_body> res{piecewise_construct,
-                make_tuple(move(body)),
-                make_tuple(http::status::ok, req.version())};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "application/json");
-        res.keep_alive(req.keep_alive());
-        return send(std::move(res));
-        
-    }
-    if (req.method() == http::verb::delete_) {
-        if (path != "./") {
-            auto pubmsg = mqtt::make_message("delete", path);
-            pubmsg->set_qos(1);
-            client.publish(pubmsg);
-            auto msg = client.consume_message(); 
-            while (true) {
-                if (msg) {
-                    break;
-                }
-            }                   
+        } 
+        if (msg->get_topic() == "serr") {
+            return send(server_error(msg->to_string()));
+        }                  
+        else {
             ofstream respond("out.json");
             respond << msg->to_string();
             respond.close();
@@ -162,6 +143,38 @@ mqtt::client& client) {
             res.set(http::field::content_type, "application/json");
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
+        }
+    }
+    if (req.method() == http::verb::delete_) {
+        if (path != "./") {
+            auto pubmsg = mqtt::make_message("delete", path);
+            pubmsg->set_qos(1);
+            client.publish(pubmsg);
+            auto msg = client.consume_message(); 
+            while (true) {
+                if (msg) {
+                    break;
+                }
+            }
+            if (msg->get_topic() == "serr") {
+                
+            return send(server_error(msg->to_string()));
+            }
+            else {                 
+                ofstream respond("out.json");
+                respond << msg->to_string();
+                respond.close();
+                http::file_body::value_type body;
+                beast::error_code ec;
+                body.open("out.json", beast::file_mode::scan, ec);   
+                http::response<http::file_body> res{piecewise_construct,
+                        make_tuple(move(body)),
+                        make_tuple(http::status::ok, req.version())};
+                res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+                res.set(http::field::content_type, "application/json");
+                res.keep_alive(req.keep_alive());
+                return send(std::move(res));
+            }    
         }       
         else return send(not_found(req.target()));
     }
@@ -206,6 +219,7 @@ void do_session(tcp::socket& socket) {
     client.connect(connOps);
     client.subscribe("out", 1);
     client.subscribe("err", 1);
+    client.subscribe("serr", 1);
     for(;;) {
         http::request<http::string_body> req;
         http::read(socket, buffer, req, ec);

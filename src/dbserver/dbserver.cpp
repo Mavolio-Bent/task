@@ -11,8 +11,7 @@
 
 using namespace std;
 using namespace pqxx; 
-const string DB_NAME {"devices"};
-const string HELP_MESSAGE {"Usage: dbserver <dbuser> <password> <address> <port> <mqtt-broker address>\n"};
+const string HELP_MESSAGE {"Usage: dbserver <dbname> <dbuser> <password> <address> <port> <mqtt-broker address>\n"};
 string mqtt_host;
 
 class SelectSQL {
@@ -145,6 +144,30 @@ class InsertSQL {
     }
 };
 
+//separates request in the form of ./dbname/bar to be pair (dname ./bar)
+pair<string, string> separate(string path) {
+    string first = "";
+    string second = "./";
+    int i = 0;
+    bool matchedBegin = false;
+    for (; i < path.size(); i++) {
+        if (path[i] == '/' && !matchedBegin) {
+            matchedBegin = true;
+        }
+        else if (matchedBegin && path[i] != '/') {
+            first = first + path[i];
+        }
+        else if (matchedBegin && path[i] == '/') {
+            i += 1;
+            break;
+        }
+    }
+    for (; i < path.size(); i++) {
+        second = second + path[i];
+    }
+    return make_pair(first, second);
+}
+
 string format_res(result r) {
     string formatted = "{ ";
     int i = 1;
@@ -227,38 +250,40 @@ void del(pqxx::connection& conn, mqtt::client& client, string target) {
 }
 
 int main(int argc, char* args[]) {
-    try {
-        if (argc != 6) {
-            cerr << HELP_MESSAGE;
-            return 1;
-        }
+    if (argc != 6) {
+        cerr << HELP_MESSAGE;
+        return 1;
+    }
+    const string USER = args[1];
+    const string PASSWORD = args[2];
+    const string ADDRESS = args[3];
+    const string PORT = args[4];
+    mqtt_host = args[5];
         
-        const string USER = args[1];
-        const string PASSWORD = args[2];
-        const string ADDRESS = args[3];
-        const string PORT = args[4];
-        mqtt_host = args[5];
-        
-        connection conn("dbname = " + DB_NAME + " user = " + USER + 
-            " password = " + PASSWORD + " hostaddr = " + ADDRESS + " port = " + PORT);
-            
-        mqtt::client client(mqtt_host, "dbserver");
-        mqtt::connect_options connOps;
-        connOps.set_keep_alive_interval(30);
-        connOps.set_clean_session(true);
-        client.connect(connOps);    
-        client.subscribe({"get", "post", "delete"}, {1, 1, 1});
-        for (;;) {
-            auto msg = client.consume_message();
-            if (msg) {
+    mqtt::client client(mqtt_host, "dbserver");
+    mqtt::connect_options connOps;
+    connOps.set_keep_alive_interval(30);
+    connOps.set_clean_session(true);
+    client.connect(connOps);    
+    client.subscribe({"get", "post", "delete"}, {1, 1, 1});
+    for (;;) {
+        auto msg = client.consume_message();
+        if (msg) {
+            auto sep = separate(msg->to_string());
+            try {
+                connection conn("dbname = " + sep.first + " user = " + USER + 
+                    " password = " + PASSWORD + " hostaddr = " + ADDRESS + " port = " + PORT);
                 if (msg->get_topic() == "get") {
-                    select(conn, client, msg->to_string());
+                    auto sep = separate(msg->to_string());
+                    connection conn("dbname = " + sep.first + " user = " + USER + 
+                        " password = " + PASSWORD + " hostaddr = " + ADDRESS + " port = " + PORT);
+                    select(conn, client, sep.second);
                 }
                 else if (msg->get_topic() == "post") {
-                    const auto idx = msg->to_string().find_first_of("/");
+                    const auto idx = sep.second.find_first_of("/");
                     if (std::string::npos != idx) { 
-                        string targ = msg->to_string().substr(idx + 1);
-                        insert(conn, client, targ);
+                        string targ = sep.second.substr(idx + 1);
+                    insert(conn, client, targ);
                     }
                     else {
                         auto pubmsg = mqtt::make_message("err", "{\"success\": \"false\"}");                     
@@ -267,12 +292,16 @@ int main(int argc, char* args[]) {
                     }
                 }
                 else if (msg->get_topic() == "delete") {
-                    del(conn, client, msg->to_string());
+                    del(conn, client, sep.second);
                 }
             }
+            catch (const exception &e) {
+                auto pubmsg = mqtt::make_message("serr", "Database Error");                     
+                pubmsg->set_qos(1);
+                client.publish(pubmsg);     
+            }
+            
         }
-    } catch (const exception &e) {
-      cerr << e.what() << "\n";
-      return 1;
     }
+
 }
