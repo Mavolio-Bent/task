@@ -217,13 +217,17 @@ pair<string, string> separate(string path)
 }
 
 //insert backslashes to produce valid json output
-string handle_backslash(string in)
+string handle_symbols(string in)
 {
     string res = in;
     for (int i = 0; i < res.size(); i++)
     {
         if (res[i] == '\\')
         {
+            res.insert(i, "\\");
+            i += 2;
+        }
+        else if (res[i] == '"') {
             res.insert(i, "\\");
             i += 2;
         }
@@ -243,7 +247,7 @@ string format_res(result r)
         for (auto field = row.begin(); field != row.end(); field++, k++)
         {
             string query(field->c_str());
-            query = handle_backslash(query);
+            query = handle_symbols(query);
             formatted = formatted + "\"" + query + "\"";
             if (k != row.size() - 1)
             {
